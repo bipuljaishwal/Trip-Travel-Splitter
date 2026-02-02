@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Travel Expense Splitter</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <style>
+        /* --- Theme Variables --- */
+        :root {
+            --primary: #4f46e5;
+            --primary-light: #e0e7ff;
+            --bg-body: #f8fafc;
+            --bg-surface: #ffffff;
+            --border: #e2e8f0;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --success: #10b981;
+            --success-bg: #ecfdf5;
+            --danger: #ef4444;
+            --radius: 16px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+
+        .app-container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+            background: var(--bg-surface);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 85vh;
+        }
+
+        /* --- Header --- */
+        .header {
+            padding: 16px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+        }
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-icon {
+            width: 40px; height: 40px; background: var(--primary); color: white;
+            border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+            box-shadow: 0 4px 10px rgba(79, 70, 229, 0.2);
+        }
+        .brand-text h1 { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+        .brand-text p { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* --- Colorful Navigation --- */
+        .nav-wrapper {
+            background: var(--bg-surface);
+            border-bottom: 1px solid var(--border);
+            padding: 0 24px;
+            overflow-x: auto;
+            white-space: nowrap;
+            /* Hide scrollbar */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+        .nav-wrapper::-webkit-scrollbar { display: none; }
+
+        .nav-tabs { display: flex; gap: 8px; padding: 12px 0; }
+
+        .nav-btn {
+            background: transparent; border: none; padding: 10px 16px;
+            font-size: 0.95rem; font-weight: 600; color: var(--text-muted);
+            cursor: pointer; display: flex; align-items: center; gap: 8px;
+            border-radius: 10px; transition: all 0.2s ease;
+        }
+
+        /* Icons Styling */
+        .nav-btn i { font-size: 1.2rem; transition: transform 0.2s; }
+
+        /* Specific Colors */
+        .nav-btn[data-tab="setup"] i { color: #3b82f6; } /* Blue */
+        .nav-btn[data-tab="transactions"] i { color: #10b981; } /* Emerald */
+        .nav-btn[data-tab="dashboard"] i { color: #8b5cf6; } /* Violet */
+        .nav-btn[data-tab="data"] i { color: #f59e0b; } /* Amber */
+
+        /* Active State */
+        .nav-btn:hover { background: #f8fafc; }
+        .nav-btn.active { background: #eff6ff; color: var(--primary); }
+        .nav-btn.active[data-tab="setup"] { background: #eff6ff; color: #1d4ed8; }
+        .nav-btn.active[data-tab="transactions"] { background: #ecfdf5; color: #047857; }
+        .nav-btn.active[data-tab="dashboard"] { background: #f5f3ff; color: #6d28d9; }
+        .nav-btn.active[data-tab="data"] { background: #fffbeb; color: #b45309; }
+
+        /* --- Content --- */
+        .content-area { padding: 24px; flex: 1; background: #f1f5f9; }
+        .tab-content { display: none; animation: fadeIn 0.3s ease; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Sections --- */
+        .section-card {
+            background: white; border-radius: var(--radius); padding: 20px;
+            border: 1px solid var(--border); margin-bottom: 20px;
+            box-shadow: var(--shadow-sm);
+        }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+        .section-title { font-size: 1.1rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+
+        /* --- Forms --- */
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; align-items: end; }
+        .form-group label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; }
+        .input-field {
+            width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 10px;
+            font-family: inherit; font-size: 0.95rem; background: #fff; transition: all 0.2s;
+        }
+        .input-field:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+        .input-field:disabled { background-color: #f1f5f9; color: #94a3b8; }
+
+        .custom-input-wrapper { margin-top: 10px; display: none; }
+        .custom-input-wrapper.show { display: block; animation: slideDown 0.2s; }
+        @keyframes slideDown { from { transform: translateY(-5px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* --- Buttons --- */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 12px 20px; border-radius: 10px; font-weight: 600; font-size: 0.95rem;
+            cursor: pointer; border: none; transition: 0.2s;
+        }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .btn-primary { background: #4f46e5; color: white; box-shadow: 0 2px 5px rgba(79, 70, 229, 0.3); }
+                .btn-primary:hover:not(:disabled) { background: #4338ca; transform: translateY(-1px); }
+        .btn-secondary { background: white; border: 1px solid var(--border); color: var(--text-main); }
+        .btn-secondary:hover { background: #f8fafc; border-color: #cbd5e1; }
+        .btn-danger { background: #fee2e2; color: #b91c1c; }
+        .btn-full { width: 100%; }
+
+        .btn-ghost { background: transparent; color: var(--text-muted); padding: 8px; border-radius: 8px; border: none; cursor: pointer; }
+        .btn-ghost:hover { background: #f1f5f9; color: var(--primary); }
+        .btn-ghost.delete-action:hover { background: #fef2f2; color: var(--danger); }
+
+        /* --- Travelers List --- */
+        .traveler-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+        .traveler-chip {
+            background: white; border: 1px solid var(--border); padding: 10px; border-radius: 12px;
+            display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
+            transition: transform 0.2s;
+        }
+        .traveler-chip:active { transform: scale(0.98); }
+        .avatar { width: 32px; height: 32px; background: var(--primary-light); color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; margin-right: 8px; }
+        .banker-tag { font-size: 0.65rem; background: #fffbeb; color: #d97706; padding: 2px 6px; border-radius: 6px; font-weight: 700; border: 1px solid #fcd34d; margin-left: 4px; text-transform: uppercase; }
+
+        /* --- Settlements UI (Beautiful & Horizontal) --- */
+        .settlement-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary); /* Accent Bar */
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .settlement-party {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-weight: 600;
+            color: var(--text-main);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .settlement-avatar {
+            width: 40px; height: 40px;
+            background: #f1f5f9; color: var(--text-muted);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; font-weight: 700;
+        }
+
+        .settlement-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 10px;
+        }
+
+        .settlement-arrow {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            margin-bottom: 2px;
+        }
+
+        .settlement-amount {
+            background: var(--success-bg);
+            color: #059669;
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            white-space: nowrap;
+        }
+
+        /* --- Dashboard Stats --- */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: white; padding: 20px; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); }
+        .stat-label { font-size: 0.85rem; color: var(--text-muted); font-weight: 600; margin-bottom: 5px; }
+        .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--text-main); }
+
+        /* --- Tables --- */
+        .table-responsive { width: 100%; overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; white-space: nowrap; background: white; }
+        th { text-align: left; padding: 14px 16px; background: #f8fafc; color: var(--text-muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text-main); }
+
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+        .badge-expense { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+        .badge-advance { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+        .badge-google { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+
+        /* --- Animation Utils --- */
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* --- Alerts --- */
+        .alert-box { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; padding: 14px; border-radius: 10px; margin-bottom: 20px; display: flex; align-items: flex-start; gap: 10px; font-size: 0.9rem; line-height: 1.5; }
+
+        /* --- Toasts --- */
+        #toast-container { position: fixed; top: 30px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; width: auto; max-width: 90%; }
+        .toast {
+            min-width: 300px; background: white; padding: 14px 18px; border-radius: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            display: flex; align-items: center; gap: 12px;
+            border-left: 5px solid transparent; animation: slideInUp 0.3s ease;
+        }
+        .toast-success { border-left-color: var(--success); }
+        .toast-success i { color: var(--success); font-size: 1.4rem; }
+        .toast-error { border-left-color: var(--danger); }
+        .toast-error i { color: var(--danger); font-size: 1.4rem; }
+
+        .toast-content { display: flex; flex-direction: column; }
+        .toast-title { font-weight: 700; font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; }
+        .toast-msg { color: var(--text-main); font-size: 0.9rem; font-weight: 500; }
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- Responsive Tweaks --- */
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            .header { padding: 16px; flex-direction: column; align-items: flex-start; gap: 12px; }
+            .header-actions { width: 100%; } .header-actions button { width: 100%; }
+            .nav-wrapper { padding: 0 16px; }
+            .content-area { padding: 16px; }
+            .form-grid { grid-template-columns: 1fr; }
+
+            /* Card Table for Mobile */
+            .mobile-table thead { display: none; }
+            .mobile-table tr { display: block; border: 1px solid var(--border); margin-bottom: 12px; border-radius: 12px; padding: 12px; background: white; }
+            .mobile-table td { display: flex; justify-content: space-between; border: none; padding: 6px 0; align-items: center; border-bottom: 1px solid #f8fafc; }
+            .mobile-table td:last-child { border-bottom: none; }
+            .mobile-table td::before { content: attr(data-label); font-weight: 600; color: var(--text-muted); font-size: 0.85rem; }
+        }
+
+        @media print {
+            .app-container { box-shadow: none; border: none; }
+            .header-actions, .nav-wrapper, .btn-no-print, .form-section-hide, .alert-box, #setup, #transactions, #data { display: none !important; }
+            #dashboard { display: block !important; }
+            .section-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header class="header">
+            <div class="brand">
+                <div class="brand-icon"><i class="ri-plane-fill"></i></div>
+                <div class="brand-text">
+                    <h1>Travel Splitter</h1>
+                    <p id="headerProjectTitle">Summer Trip 2026</p>
+                </div>
+            </div>
+            <div class="header-actions btn-no-print">
+                <button class="btn btn-secondary" onclick="downloadPDF()">
+                    <i class="ri-file-pdf-2-line"></i> Download Report
+                </button>
+            </div>
+        </header>
+
+        <nav class="nav-wrapper btn-no-print">
+            <div class="nav-tabs">
+                <button class="nav-btn active" data-tab="setup"><i class="ri-settings-4-line"></i> Setup</button>
+                <button class="nav-btn" data-tab="transactions"><i class="ri-exchange-dollar-line"></i> Transactions</button>
+                <button class="nav-btn" data-tab="dashboard"><i class="ri-pie-chart-2-line"></i> Dashboard</button>
+                <button class="nav-btn" data-tab="data"><i class="ri-database-2-line"></i> Data</button>
+            </div>
+        </nav>
+
+        <main class="content-area">
+
+            <div id="setup" class="tab-content active">
+                <div class="section-card form-section-hide">
+                    <div class="section-header"><div class="section-title"><i class="ri-pencil-ruler-2-line"></i> Trip Details</div></div>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Trip Name</label>
+                            <input type="text" id="projectTitle" class="input-field" value="Summer Trip 2026" onchange="updateHeaderTitle()">
+                        </div>
+                        <div class="form-group">
+                            <label>Money Keeper (Master Banker)</label>
+                            <select id="bankerSelect" class="input-field" onchange="updateBanker()">
+                                <option value="">-- Who holds the cash? --</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card form-section-hide">
+                    <div class="section-header"><div class="section-title"><i class="ri-google-fill"></i> Server Data Sync</div></div>
+                    <div class="alert-box">
+                        <i class="ri-information-line"></i>
+                        <div>
+                            <strong>Setup:</strong> Share your Google Sheet as <strong>"Anyone with link" -> "Viewer"</strong> and paste the link below.
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <div class="form-group" style="grid-column: 1 / -1;">
+                            <label>Google Sheet URL</label>
+                            <input type="text" id="masterSheetUrl" class="input-field" placeholder="https://docs.google.com/spreadsheets/d/..." onchange="saveToLocal()">
+                        </div>
+                    </div>
+                    <div style="margin-top: 20px;">
+                        <button id="btnSync" class="btn btn-primary" onclick="syncGoogleSheetData()">
+                            <i class="ri-refresh-line"></i> <span>Sync Data Now</span>
+                        </button>
+                    </div>
+                    <div id="syncStatus" style="margin-top: 15px; font-size: 0.9rem; font-weight: 500;"></div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title"><i class="ri-group-line"></i> Travelers <span class="badge badge-expense" id="travelerCountBadge" style="margin-left:10px">0</span></div>
+                    </div>
+                    <div class="form-grid form-section-hide" style="margin-bottom: 24px;">
+                        <div class="form-group" style="flex: 1;">
+                            <label>Add New Traveler</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="travelerName" class="input-field" placeholder="Enter Name">
+                                <button class="btn btn-primary" onclick="addTraveler()"><i class="ri-add-line"></i> Add</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="travelersList" class="traveler-list"></div>
+                </div>
+            </div>
+
+            <div id="transactions" class="tab-content">
+                <div class="section-card form-section-hide">
+                    <div class="section-header"><div class="section-title"><i class="ri-add-circle-line"></i> Record Transaction</div></div>
+
+                    <div style="background: white; border: 1px solid var(--border); padding: 15px; border-radius: 12px; margin-bottom: 20px; display: flex; gap: 20px; align-items: center;">
+                        <label style="font-weight: 600; color: var(--text-muted); margin-right: 10px;">Type:</label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="transType" value="EXPENSE" checked onchange="toggleTransType()" style="transform: scale(1.2);">
+                            <span style="font-weight: 500;">Expense</span>
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="transType" value="ADVANCE" onchange="toggleTransType()" style="transform: scale(1.2);">
+                            <span style="font-weight: 500; color: var(--success);">Advance</span>
+                        </label>
+                    </div>
+
+                    <div id="advanceInfoBox" class="alert-box" style="display: none;">
+                        <i class="ri-wallet-3-line"></i>
+                        <div>Recording that <strong><span id="advancePayerName">Selected Person</span></strong> gave money to the <strong>Money Keeper</strong>.</div>
+                    </div>
+
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Date</label>
+                            <input type="date" id="transDate" class="input-field">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Description</label>
+                            <select id="transDescSelect" class="input-field" onchange="toggleCustomDescInput()">
+                                <option value="Food & Drinks">🍔 Food & Drinks</option>
+                                <option value="Travel / Flight">✈️ Travel / Flight</option>
+                                <option value="Hotel / Stay">🏨 Hotel / Stay</option>
+                                <option value="Cab / Taxi">🚕 Cab / Taxi</option>
+                                <option value="Shopping">🛍️ Shopping</option>
+                                <option value="Activity / Ticket">🎟️ Activity / Ticket</option>
+                                <option value="Fuel">⛽ Fuel</option>
+                                <option value="Other">✏️ Other (Custom)</option>
+                                <option value="Advance" disabled hidden>💸 Advance Payment</option>
+                            </select>
+                            <div id="customDescWrapper" class="custom-input-wrapper">
+                                <input type="text" id="transDescCustom" class="input-field" placeholder="Enter description..." style="margin-top: 5px;">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="number" id="transAmount" class="input-field" placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label>Paid By</label>
+                            <select id="transPayer" class="input-field" onchange="updateAdvanceLabel()"></select>
+                        </div>
+                        <div class="form-group">
+                            <button class="btn btn-primary btn-full" onclick="addTransaction()">
+                                <i class="ri-check-line"></i> Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title"><i class="ri-list-check"></i> History</div>
+                        <div class="btn-no-print">
+                            <select id="filterTraveler" class="input-field" style="padding: 10px;" onchange="renderTransactionsTable()">
+                                <option value="">All Travelers</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="mobile-table">
+                            <thead><tr><th>Date</th><th>Description</th><th>Type</th><th>Amount</th><th>Paid By</th><th class="btn-no-print">Action</th></tr></thead>
+                            <tbody id="transactionsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div id="dashboard" class="tab-content">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Cost</div>
+                        <div class="stat-value">₹<span id="totalCost">0</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Per Person Share</div>
+                        <div class="stat-value">₹<span id="perPersonShare">0</span></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Transactions</div>
+                        <div class="stat-value"><span id="totalTransCount">0</span></div>
+                    </div>
+                </div>
+
+                <div class="charts-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px; margin-bottom: 30px;">
+                    <div class="section-card" style="margin-bottom:0;">
+                        <div class="section-header"><div class="section-title">Expense Breakdown</div></div>
+                        <div class="chart-wrapper"><canvas id="categoryChart"></canvas></div>
+                    </div>
+                    <div class="section-card" style="margin-bottom:0;">
+                        <div class="section-header"><div class="section-title">Spending by Person</div></div>
+                        <div class="chart-wrapper"><canvas id="personChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;">
+                    <div class="section-card">
+                        <div class="section-header"><div class="section-title"><i class="ri-scales-3-line"></i> Net Balances</div></div>
+                        <table class="mobile-table"><tbody id="balancesBody"></tbody></table>
+                    </div>
+                    <div class="section-card">
+                        <div class="section-header"><div class="section-title"><i class="ri-hand-coin-line"></i> Settlement Plan</div></div>
+                        <div id="settlementList"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="data" class="tab-content">
+                <div class="section-card">
+                    <div class="section-header"><div class="section-title"><i class="ri-save-3-line"></i> Data Management</div></div>
+                    <div style="display:flex; gap:12px; flex-wrap: wrap;">
+                        <button class="btn btn-primary" onclick="exportData()"><i class="ri-download-cloud-line"></i> Backup JSON</button>
+                        <input type="file" id="importFile" style="display:none" onchange="importData(event)">
+                        <button class="btn btn-secondary" onclick="document.getElementById('importFile').click()"><i class="ri-upload-cloud-line"></i> Restore JSON</button>
+                        <button class="btn btn-danger" onclick="resetData()"><i class="ri-delete-bin-line"></i> Reset All Data</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="toast-container"></div>
+
+   <script>
+    const { jsPDF } = window.jspdf;
+    const STORAGE_KEY = 'travel_splitter_final_prod';
+
+    const state = {
+        projectTitle: 'Summer Trip 2026',
+        travelers: [],
+        transactions: [],
+        bankerId: null,
+        nextTravelerId: 1,
+        nextTransactionId: 1,
+        masterSheetUrl: ''
+    };
+
+    let categoryChartInstance = null;
+    let personChartInstance = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('transDate').valueAsDate = new Date();
+        loadFromLocal();
+        setupNavigation();
+        renderAll();
+        document.getElementById('customDescWrapper').classList.remove('show');
+    });
+
+    // --- Core ---
+    function saveToLocal() {
+        state.masterSheetUrl = document.getElementById('masterSheetUrl').value;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    
+    function loadFromLocal() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                Object.assign(state, JSON.parse(saved));
+                document.getElementById('projectTitle').value = state.projectTitle;
+                document.getElementById('headerProjectTitle').textContent = state.projectTitle;
+                if(state.masterSheetUrl) document.getElementById('masterSheetUrl').value = state.masterSheetUrl;
+            } catch (e) { console.error(e); }
+        }
+    }
+
+    // --- Sync Logic (FIXED) ---
+    async function syncGoogleSheetData() {
+        const masterUrl = document.getElementById('masterSheetUrl').value.trim();
+        const btn = document.getElementById('btnSync');
+        const btnIcon = btn.querySelector('i');
+        const btnText = btn.querySelector('span');
+        const statusEl = document.getElementById('syncStatus');
+
+        if (!masterUrl) return showToast("Enter Google Sheet URL", "error");
+
+        const idMatch = masterUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (!idMatch || idMatch[1].length < 15) return showToast("Invalid Link format", "error");
+        const sheetId = idMatch[1];
+
+        // UI Loading State
+        btn.disabled = true;
+        btnIcon.classList.remove('ri-refresh-line');
+        btnIcon.classList.add('ri-loader-4-line', 'spin');
+        btnText.textContent = "Connecting...";
+        statusEl.innerHTML = `<span style="color:var(--primary)">Initiating connection...</span>`;
+
+        const expenseUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=Form+Responses+1`;
+        const advanceUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=Form+Responses+2`;
+
+        let count = 0;
+        try {
+            // 1. Fetch Advances
+            statusEl.innerHTML = `<span style="color:var(--primary)">Fetching Advances...</span>`;
+            const advData = await fetchCSVDirect(advanceUrl);
+            
+            // Fix: Use index (i) to generate unique ID
+            if (advData.length > 0) {
+                advData.forEach((row, i) => {
+                    const amt = findVal(row, ['Amount', 'INR']);
+                    const dateStr = findVal(row, ['Timestamp', 'Date']);
+                    let payee = findVal(row, ['Payee', 'Name']);
+                    if (!payee && row['Email Address']) payee = row['Email Address'].split('@')[0];
+                    
+                    if (!amt || !dateStr || !payee) return;
+
+                    let name = cleanName(payee);
+                    let traveler = getOrCreateTraveler(name);
+                    
+                    // Generate Unique Sync ID using Sheet Name + Row Index
+                    const syncId = `SHEET_ADV_${i}`; 
+
+                    addSyncedTransaction({ 
+                        type: 'ADVANCE', 
+                        date: parseSheetDate(dateStr), 
+                        description: "Advance via Sheet", 
+                        amount: parseFloat(amt.replace(/,/g, '')), 
+                        payerId: traveler.id, 
+                        source: 'SHEET',
+                        syncId: syncId 
+                    });
+                    count++;
+                });
+            }
+
+            // 2. Fetch Expenses
+            statusEl.innerHTML = `<span style="color:var(--primary)">Fetching Expenses...</span>`;
+            const expData = await fetchCSVDirect(expenseUrl);
+            
+            // Fix: Use index (i) to generate unique ID
+            if (expData.length > 0) {
+                expData.forEach((row, i) => {
+                    const amt = findVal(row, ['Amount', 'INR']);
+                    const dateStr = findVal(row, ['Timestamp', 'Date']);
+                    const desc = findVal(row, ['Description', 'Purpose']) || "Sheet Expense";
+                    const email = findVal(row, ['Email', 'Username']);
+                    
+                    if (!amt || !dateStr) return;
+
+                    let name = "Unknown";
+                    if (email) name = cleanName(email.split('@')[0]);
+
+                    let traveler = findTravelerFuzzy(name);
+                    if (!traveler) { traveler = { id: state.nextTravelerId++, name: name }; state.travelers.push(traveler); }
+
+                    // Generate Unique Sync ID using Sheet Name + Row Index
+                    const syncId = `SHEET_EXP_${i}`;
+
+                    addSyncedTransaction({ 
+                        type: 'EXPENSE', 
+                        date: parseSheetDate(dateStr), 
+                        description: desc, 
+                        amount: parseFloat(amt.replace(/,/g, '')), 
+                        payerId: traveler.id, 
+                        source: 'SHEET',
+                        syncId: syncId
+                    });
+                    count++;
+                });
+            }
+
+            saveToLocal(); 
+            renderAll();
+            statusEl.innerHTML = `<span style="color:var(--success)">✅ Successfully synced.</span>`;
+            showToast("Sync Complete!", "success");
+
+        } catch (err) {
+            console.error(err);
+            statusEl.innerHTML = `<span style="color:var(--danger)">❌ Sync Error. Check Console.</span>`;
+            showToast("Sync Failed", "error");
+        } finally {
+            btn.disabled = false;
+            btnIcon.classList.remove('ri-loader-4-line', 'spin');
+            btnIcon.classList.add('ri-refresh-line');
+            btnText.textContent = "Sync Data Now";
+        }
+    }
+
+    async function fetchCSVDirect(url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error("Net Error");
+            const text = await response.text();
+            if (text.includes("<!DOCTYPE html") || text.includes("google-site-verification")) throw new Error("Private");
+            return new Promise((resolve) => Papa.parse(text, { header: true, skipEmptyLines: true, complete: (res) => resolve(res.data), error: () => resolve([]) }));
+        } catch(e) { throw e; }
+    }
+
+    function cleanName(name) { return name ? name.replace(/[.@]/g, ' ').replace(/[0-9]/g, '').trim().split(' ').map(w=>w.charAt(0).toUpperCase()+w.slice(1)).join(' ') : "Unknown"; }
+    function findTravelerFuzzy(inputName) { if(!inputName) return null; const clean = inputName.toLowerCase(); return state.travelers.find(t => t.name.toLowerCase().includes(clean) || clean.includes(t.name.toLowerCase())); }
+    function findVal(row, keys) { const rk = Object.keys(row); for (const k of rk) { for (const key of keys) { if (k.toLowerCase().includes(key.toLowerCase())) return row[k]; } } return null; }
+    function getOrCreateTraveler(name) { let t = state.travelers.find(p => p.name.toLowerCase() === name.toLowerCase()); if (!t) { t = { id: state.nextTravelerId++, name: name }; state.travelers.push(t); } return t; }
+    function parseSheetDate(ts) { let d = new Date(ts); return isNaN(d.getTime()) ? new Date().toISOString().split('T')[0] : d.toISOString().split('T')[0]; }
+
+    // --- Transaction Add Logic (FIXED) ---
+    function addSyncedTransaction(tx) {
+        // Fix: Check by syncId OR check strict duplicate for safety
+        // If the transaction has a syncId, we check if that specific ID exists.
+        // If not (legacy data), we fallback to the old check.
+        const exists = state.transactions.some(e => {
+            if (tx.syncId && e.syncId) {
+                return e.syncId === tx.syncId;
+            }
+            // Fallback for manual or old data
+            return e.amount === tx.amount && e.date === tx.date && e.payerId === tx.payerId && e.type === tx.type && e.description === tx.description;
+        });
+
+        if (!exists) {
+            tx.id = state.nextTransactionId++;
+            tx.isSynced = true;
+            state.transactions.push(tx);
+        }
+    }
+
+    // --- UI Interactions ---
+    function toggleTransType() {
+        const type = document.querySelector('input[name="transType"]:checked').value;
+        const infoBox = document.getElementById('advanceInfoBox');
+        const desc = document.getElementById('transDescSelect');
+        const custom = document.getElementById('customDescWrapper');
+
+        if (type === 'ADVANCE') {
+            infoBox.style.display = 'flex';
+            if(![...desc.options].some(o => o.value === 'Advance')) {
+                const opt = document.createElement('option'); opt.value = 'Advance'; opt.text = '💸 Advance Payment'; desc.add(opt);
+            }
+            desc.value = 'Advance';
+            desc.disabled = true;
+            custom.classList.remove('show');
+            updateAdvanceLabel();
+        } else {
+            infoBox.style.display = 'none';
+            desc.disabled = false;
+            if (desc.value === 'Advance') desc.value = 'Food & Drinks'; 
+            toggleCustomDescInput();
+        }
+    }
+
+    function updateAdvanceLabel() { const pid = document.getElementById('transPayer').value; const name = state.travelers.find(t=>t.id==pid)?.name || 'Selected Person'; document.getElementById('advancePayerName').textContent = name; }
+
+    function toggleCustomDescInput() {
+        const sel = document.getElementById('transDescSelect');
+        const wrap = document.getElementById('customDescWrapper');
+        if (sel.value === 'Other' && !sel.disabled) {
+            wrap.classList.add('show');
+            setTimeout(() => document.getElementById('transDescCustom').focus(), 100);
+        } else {
+            wrap.classList.remove('show');
+        }
+    }
+
+    function addTransaction() {
+        const date = document.getElementById('transDate').value;
+        const amt = parseFloat(document.getElementById('transAmount').value);
+        const pid = parseInt(document.getElementById('transPayer').value);
+        const type = document.querySelector('input[name="transType"]:checked').value;
+
+        if(!date || isNaN(amt) || !pid) return showToast('Check all fields', 'error');
+        if(type==='ADVANCE' && !state.bankerId) return showToast('Set Money Keeper first', 'error');
+
+        let desc = document.getElementById('transDescSelect').value;
+        if(desc === 'Other') desc = document.getElementById('transDescCustom').value.trim();
+        if(type === 'ADVANCE') desc = 'Advance Payment';
+
+        state.transactions.push({ id: state.nextTransactionId++, type, date, description: desc, amount: amt, payerId: pid, isSynced: false });
+
+        document.getElementById('transAmount').value='';
+        showToast('Transaction Saved', 'success');
+        saveToLocal(); renderAll();
+    }
+
+    // --- App Logic (FIXED Math) ---
+    function setupNavigation() { document.querySelectorAll('.nav-btn').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active')); document.getElementById(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab === 'dashboard') renderCharts(); })); }
+    function updateHeaderTitle() { state.projectTitle = document.getElementById('projectTitle').value; document.getElementById('headerProjectTitle').textContent = state.projectTitle; saveToLocal(); }
+    function updateBanker() { state.bankerId = parseInt(document.getElementById('bankerSelect').value) || null; saveToLocal(); renderAll(); showToast('Money Keeper Updated', 'success'); }
+    function addTraveler() { const name = document.getElementById('travelerName').value.trim(); if(!name) return showToast('Enter name', 'error'); if(state.travelers.some(t=>t.name.toLowerCase()===name.toLowerCase())) return showToast('Exists', 'error'); state.travelers.push({ id: state.nextTravelerId++, name }); document.getElementById('travelerName').value=''; showToast('Added', 'success'); saveToLocal(); renderAll(); }
+    function removeTraveler(id) { if(confirm('Remove?')) { state.travelers = state.travelers.filter(t=>t.id!==id); if(state.bankerId===id) state.bankerId=null; saveToLocal(); renderAll(); } }
+    function editTraveler(id) { const t = state.travelers.find(x => x.id === id); if(!t) return; const newName = prompt("Rename traveler:", t.name); if(newName && newName.trim() !== "") { t.name = newName.trim(); saveToLocal(); renderAll(); showToast("Renamed", "success"); } }
+    function deleteTransaction(id) { if(confirm('Delete?')) { state.transactions = state.transactions.filter(t=>t.id!==id); saveToLocal(); renderAll(); showToast('Deleted', 'success'); } }
+
+    function getMetrics() {
+        const exp = state.transactions.filter(t=>t.type==='EXPENSE'); 
+        const adv = state.transactions.filter(t=>t.type==='ADVANCE'); 
+        
+        // Helper to avoid floating point errors
+        const toFixed = (num) => Math.round(num * 100) / 100;
+
+        const total = exp.reduce((s,t)=>s+t.amount,0); 
+        const share = total / (state.travelers.length||1);
+
+        const balances = state.travelers.map(p => {
+            const pdExp = exp.filter(t=>t.payerId===p.id).reduce((s,t)=>s+t.amount,0); 
+            const pdAdv = adv.filter(t=>t.payerId===p.id).reduce((s,t)=>s+t.amount,0);
+            
+            // Banker Logic Check
+            let recAdv = 0;
+            if(state.bankerId && state.bankerId===p.id) {
+                recAdv = adv.reduce((s,t)=>s+t.amount,0);
+            }
+            
+            return { ...p, netBalance: toFixed((pdExp + pdAdv) - recAdv - share) };
+        });
+        return { totalCost: toFixed(total), share: toFixed(share), balances };
+    }
+
+    function calculateSettlements(bal) {
+        // Fix: Added threshold (0.01) to prevent infinite loops on tiny decimals
+        let dr = bal.filter(b=>b.netBalance < -0.01).map(b=>({...b, amount: Math.abs(b.netBalance)})); 
+        let cr = bal.filter(b=>b.netBalance > 0.01).map(b=>({...b, amount: b.netBalance})); 
+        let res = [];
+
+        dr.sort((a,b) => b.amount - a.amount); // Optimization: Match big payers first
+        cr.sort((a,b) => b.amount - a.amount);
+
+        dr.forEach(d => { 
+            cr.forEach(c => { 
+                if(d.amount > 0.01 && c.amount > 0.01) { 
+                    let amt = Math.min(d.amount, c.amount); 
+                    // Floating point safety
+                    amt = Math.round(amt * 100) / 100;
+                    
+                    if(amt > 0) { 
+                        res.push({from:d.name, to:c.name, amount:amt}); 
+                        d.amount -= amt; 
+                        c.amount -= amt; 
+                    } 
+                } 
+            }); 
+        });
+        return res;
+    }
+
+    // --- Renderers ---
+    function renderAll() { renderTravelers(); renderSelects(); renderTransactionsTable(); renderDashboard(); }
+    
+    function renderTravelers() {
+        const list = document.getElementById('travelersList'); document.getElementById('travelerCountBadge').textContent = state.travelers.length;
+        list.innerHTML = state.travelers.map(t => {
+            const isBanker = state.bankerId === t.id;
+            return `<div class="traveler-chip" style="${isBanker ? 'border-color: #fcd34d; background: #fffbeb;' : ''}">
+                <div class="traveler-info"><span class="avatar">${t.name[0].toUpperCase()}</span>${t.name}${isBanker ? '<span class="banker-tag">Banker</span>' : ''}</div>
+                <div style="display:flex; gap:5px;"><button class="btn-ghost" onclick="editTraveler(${t.id})"><i class="ri-pencil-line"></i></button><button class="btn-ghost delete-action" onclick="removeTraveler(${t.id})"><i class="ri-close-line"></i></button></div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderSelects() {
+        const opts = state.travelers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        const bankerEl = document.getElementById('bankerSelect'); bankerEl.innerHTML = '<option value="">-- Who holds the cash? --</option>' + opts; bankerEl.value = state.bankerId || "";
+        document.getElementById('transPayer').innerHTML = opts;
+        const cf = document.getElementById('filterTraveler').value; document.getElementById('filterTraveler').innerHTML = `<option value="">All Travelers</option>` + opts; document.getElementById('filterTraveler').value = cf;
+    }
+
+    function renderTransactionsTable() {
+        const tbody = document.getElementById('transactionsBody'); 
+        const f = document.getElementById('filterTraveler').value; 
+        
+        let d = [...state.transactions].sort((a,b)=> {
+            return new Date(b.date + 'T12:00:00') - new Date(a.date + 'T12:00:00'); // Safer date sort
+        });
+        
+        if(f) d = d.filter(t=>t.payerId==f);
+        if(d.length===0) { tbody.innerHTML=`<tr><td colspan="6" style="text-align:center; padding:20px; color:#999;">No records</td></tr>`; return; }
+        
+        tbody.innerHTML = d.map(t => {
+            const p = state.travelers.find(x=>x.id===t.payerId)?.name||'Unknown'; 
+            const badge = t.type==='EXPENSE'?'badge-expense':'badge-advance'; 
+            const syncBadge = t.isSynced ? `<span class="badge badge-google">Sheet</span>` : '';
+            return `<tr><td>${t.date}</td><td>${t.description} ${syncBadge}</td><td><span class="badge ${badge}">${t.type === 'EXPENSE' ? 'Expense' : 'Advance'}</span></td><td>₹${t.amount.toFixed(2)}</td><td>${p}</td><td class="btn-no-print"><button class="btn-ghost delete-action" onclick="deleteTransaction(${t.id})"><i class="ri-delete-bin-line"></i></button></td></tr>`;
+        }).join('');
+    }
+
+    function renderDashboard() {
+        const m = getMetrics(); 
+        document.getElementById('totalCost').textContent = m.totalCost.toFixed(2); 
+        document.getElementById('perPersonShare').textContent = m.share.toFixed(2); 
+        document.getElementById('totalTransCount').textContent = state.transactions.length;
+        
+        document.getElementById('balancesBody').innerHTML = m.balances.map(b => `<tr><td><strong>${b.name}</strong> ${state.bankerId===b.id?'<span class="banker-tag">Banker</span>':''}</td><td style="font-weight:700; color:${b.netBalance>=0?'var(--success)':'var(--danger)'}">${b.netBalance>=0?'+':''}₹${b.netBalance.toFixed(2)}</td></tr>`).join('');
+        
+        const sets = calculateSettlements(m.balances); const sl = document.getElementById('settlementList');
+        if(sets.length===0) sl.innerHTML=`<div style="text-align:center; padding:15px; color:var(--success); background:#ecfdf5; border-radius:8px;">All Settled!</div>`; 
+        else sl.innerHTML = sets.map(s => `
+            <div class="settlement-card">
+                <div class="settlement-party">
+                    <div class="settlement-avatar">${s.from[0]}</div>
+                    <div>${s.from}</div>
+                </div>
+                <div class="settlement-info">
+                    <div class="settlement-arrow"><i class="ri-arrow-right-line"></i></div>
+                    <div class="settlement-amount">₹${s.amount.toFixed(2)}</div>
+                </div>
+                <div class="settlement-party">
+                    <div class="settlement-avatar" style="background:#e0e7ff; color:var(--primary);">${s.to[0]}</div>
+                    <div>${s.to}</div>
+                </div>
+            </div>`).join('');
+        renderCharts();
+    }
+
+    function renderCharts() {
+        const ctxCat = document.getElementById('categoryChart').getContext('2d'); const ctxPer = document.getElementById('personChart').getContext('2d'); const exp = state.transactions.filter(t=>t.type==='EXPENSE');
+        const catMap = {}; exp.forEach(t=>{ catMap[t.description]=(catMap[t.description]||0)+t.amount; }); const perMap = {}; state.travelers.forEach(t=>{ perMap[t.name]=exp.filter(e=>e.payerId===t.id).reduce((s,x)=>s+x.amount,0); });
+        if(categoryChartInstance) categoryChartInstance.destroy(); if(personChartInstance) personChartInstance.destroy();
+        const clr = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+        categoryChartInstance = new Chart(ctxCat, { type: 'doughnut', data: { labels: Object.keys(catMap), datasets: [{ data: Object.values(catMap), backgroundColor: clr, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { usePointStyle: true, font: {family: 'Inter'} } } } } });
+        personChartInstance = new Chart(ctxPer, { type: 'bar', data: { labels: Object.keys(perMap), datasets: [{ label: 'Spent', data: Object.values(perMap), backgroundColor: '#4f46e5', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true }, x: { grid: { display: false } } }, plugins: { legend: { display: false } } } });
+    }
+
+   async function downloadPDF() {
+            const doc = new jsPDF();
+            const m = getMetrics();
+            const settlements = calculateSettlements(m.balances);
+            
+            // --- CONFIGURATION ---
+            const pageWidth = doc.internal.pageSize.width; // 210mm
+            const margin = 15;
+            const contentWidth = pageWidth - (margin * 2);
+            const primaryColor = [79, 70, 229]; // Indigo #4f46e5
+            const lightBg = [248, 250, 252];    // Slate-50
+            const borderColor = [226, 232, 240]; // Slate-200
+            const textColor = [30, 41, 59];      // Slate-800
+            const subTextColor = [100, 116, 139]; // Slate-500
+            
+            // Helper: Currency Formatter
+            const fmt = (num) => `Rs. ${num.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+
+            // --- HEADER SECTION ---
+            // 1. Logo Square
+            doc.setFillColor(...primaryColor);
+            doc.roundedRect(margin, margin, 12, 12, 2, 2, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text("TS", margin + 6, margin + 8, { align: 'center', baseline: 'middle' });
+
+            // 2. Title & Date
+            doc.setTextColor(...textColor);
+            doc.setFontSize(18);
+            doc.setFont('helvetica', 'bold');
+            doc.text("EXPENSE REPORT", margin + 18, margin + 8);
+
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...subTextColor);
+            doc.text(`Generated: ${new Date().toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' })}`, margin + 18, margin + 13);
+
+            // 3. Project Info (Right Aligned)
+            doc.setFontSize(10);
+            doc.setTextColor(...textColor);
+            doc.text(state.projectTitle.toUpperCase(), pageWidth - margin, margin + 5, { align: 'right' });
+            doc.setTextColor(...subTextColor);
+            doc.setFontSize(9);
+            doc.text(`ID: #${Math.floor(Date.now() / 1000)}`, pageWidth - margin, margin + 10, { align: 'right' });
+
+            // Divider Line
+            doc.setDrawColor(...borderColor);
+            doc.setLineWidth(0.5);
+            doc.line(margin, margin + 18, pageWidth - margin, margin + 18);
+
+            // --- SUMMARY CARDS (Dashboard on Paper) ---
+            let y = margin + 25;
+            const boxWidth = (contentWidth - 10) / 3; // 3 boxes with gap
+            const boxHeight = 22;
+
+            // Function to draw a summary card
+            const drawCard = (x, label, value, isBold = false) => {
+                doc.setFillColor(...lightBg);
+                doc.setDrawColor(...borderColor);
+                doc.roundedRect(x, y, boxWidth, boxHeight, 2, 2, 'FD');
+                
+                doc.setFontSize(8);
+                doc.setTextColor(...subTextColor);
+                doc.setFont('helvetica', 'normal');
+                doc.text(label.toUpperCase(), x + 4, y + 8);
+                
+                doc.setFontSize(12);
+                doc.setTextColor(...(isBold ? primaryColor : textColor));
+                doc.setFont('helvetica', 'bold');
+                doc.text(value, x + 4, y + 17);
+            };
+
+            drawCard(margin, "Total Trip Cost", fmt(m.totalCost), true);
+            drawCard(margin + boxWidth + 5, "Cost Per Person", fmt(m.share));
+            drawCard(margin + (boxWidth + 5) * 2, "Total Transactions", state.transactions.length.toString());
+
+            y += boxHeight + 10;
+
+            // --- SETTLEMENTS TABLE ---
+            doc.setFontSize(11);
+            doc.setTextColor(...textColor);
+            doc.setFont('helvetica', 'bold');
+            doc.text("Settlement Plan", margin, y);
+            y += 5;
+
+            const settlementData = settlements.length > 0 
+                ? settlements.map(s => [s.from, 'pays', s.to, fmt(s.amount)])
+                : [['-', 'All accounts are settled', '-', '-']];
+
+            doc.autoTable({
+                startY: y,
+                head: [['FROM', 'ACTION', 'TO', 'AMOUNT']],
+                body: settlementData,
+                theme: 'plain',
+                headStyles: { 
+                    fillColor: [255, 255, 255], 
+                    textColor: subTextColor, 
+                    fontSize: 8, 
+                    fontStyle: 'bold',
+                    halign: 'left'
+                },
+                bodyStyles: { 
+                    textColor: textColor, 
+                    fontSize: 10, 
+                    cellPadding: 4,
+                    lineColor: borderColor,
+                    lineWidth: { bottom: 0.1 }
+                },
+                columnStyles: {
+                    0: { fontStyle: 'bold' }, // From
+                    1: { textColor: subTextColor, fontStyle: 'italic' }, // Action
+                    2: { fontStyle: 'bold' }, // To
+                    3: { halign: 'right', textColor: [16, 185, 129], fontStyle: 'bold' } // Amount (Green)
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            y = doc.lastAutoTable.finalY + 15;
+
+            // --- BALANCES TABLE (Compact) ---
+            // If space is tight, check y position. For simplicity, we assume flow.
+            doc.setFontSize(11);
+            doc.setTextColor(...textColor);
+            doc.text("Net Balances", margin, y);
+            y += 5;
+
+            doc.autoTable({
+                startY: y,
+                head: [['TRAVELER', 'STATUS', 'NET BALANCE']],
+                body: m.balances.map(b => {
+                    const bal = b.netBalance;
+                    const status = bal > 0.1 ? 'To Receive' : (bal < -0.1 ? 'To Pay' : 'Settled');
+                    return [
+                        b.name + (state.bankerId === b.id ? ' (Banker)' : ''),
+                        status,
+                        fmt(Math.abs(bal))
+                    ];
+                }),
+                theme: 'grid',
+                headStyles: { fillColor: lightBg, textColor: textColor, fontSize: 8, lineColor: borderColor, lineWidth: 0.1 },
+                bodyStyles: { fontSize: 9, cellPadding: 3, textColor: textColor },
+                columnStyles: {
+                    2: { halign: 'right', fontStyle: 'bold' }
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            y = doc.lastAutoTable.finalY + 15;
+
+            // --- TRANSACTION HISTORY (Detailed) ---
+            doc.setFontSize(11);
+            doc.setTextColor(...textColor);
+            doc.text("Transaction History", margin, y);
+            y += 5;
+
+            const historyBody = [...state.transactions]
+                .sort((a, b) => new Date(b.date) - new Date(a.date))
+                .map(t => [
+                    t.date,
+                    t.description + (t.isSynced ? ' (Synced)' : ''),
+                    t.type,
+                    state.travelers.find(x => x.id === t.payerId)?.name || 'Unknown',
+                    fmt(t.amount)
+                ]);
+
+            doc.autoTable({
+                startY: y,
+                head: [['DATE', 'DESCRIPTION', 'TYPE', 'PAID BY', 'AMOUNT']],
+                body: historyBody,
+                theme: 'striped',
+                styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+                headStyles: { fillColor: primaryColor, textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [249, 250, 251] },
+                columnStyles: {
+                    4: { halign: 'right', fontStyle: 'bold' }, // Amount right aligned
+                    2: { fontSize: 7, fontStyle: 'bold' } // Type smaller
+                },
+                didParseCell: function(data) {
+                    // Color code the 'Type' column text
+                    if (data.section === 'body' && data.column.index === 2) {
+                        if (data.cell.raw === 'EXPENSE') data.cell.styles.textColor = [239, 68, 68]; // Red
+                        else data.cell.styles.textColor = [16, 185, 129]; // Green
+                    }
+                },
+                margin: { left: margin, right: margin }
+            });
+
+            // --- FOOTER (Page Numbers) ---
+            const pageCount = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(...subTextColor);
+                doc.text(
+                    `Page ${i} of ${pageCount}`,
+                    pageWidth / 2,
+                    doc.internal.pageSize.height - 10,
+                    { align: 'center' }
+                );
+            }
+
+            // Save
+            const safeTitle = state.projectTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            doc.save(`${safeTitle}_report.pdf`);
+            showToast('Enterprise Report Downloaded', 'success');
+        }
+
+    function exportData() { const blob = new Blob([JSON.stringify(state, null, 2)], {type: 'application/json'}); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'trip_data.json'; a.click(); showToast('Backup Saved', 'success'); }
+    function importData(e) { const f = e.target.files[0]; if(!f) return; const r = new FileReader(); r.onload = (ev) => { try { Object.assign(state, JSON.parse(ev.target.result)); saveToLocal(); renderAll(); showToast('Data Restored', 'success'); } catch { showToast('Invalid File', 'error'); } }; r.readAsText(f); e.target.value = ''; }
+    function resetData() { if(confirm('Reset all?')) { localStorage.removeItem(STORAGE_KEY); state.travelers=[]; state.transactions=[]; state.bankerId=null; renderAll(); showToast('Reset Complete', 'success'); } }
+
+    function showToast(msg, type='success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        const icon = type === 'success' ? 'ri-checkbox-circle-fill' : 'ri-error-warning-fill';
+        const title = type === 'success' ? 'Success' : 'Action Failed';
+        toast.innerHTML = `<i class="${icon}"></i><div class="toast-content"><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+        container.appendChild(toast);
+        setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(20px)'; setTimeout(() => toast.remove(), 400); }, 3000);
+    }
+</script>
+</body>
+</html>
